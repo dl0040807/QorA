@@ -5,6 +5,7 @@ export interface Concern {
   status: 'open' | 'closed';
   asker_session_id: string;
   created_at: string;
+  resolution_note?: string | null;
 }
 
 export type AnswererLightProfile = {

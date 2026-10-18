@@ -143,11 +143,26 @@ export async function GET(request: Request) {
   if (id) {
     const { data, error } = await supabaseAdmin
       .from("concerns")
-      .select("id, content, category, status, created_at, asker_session_id")
+      .select("id, content, category, status, created_at, asker_session_id, resolution_note")
       .eq("id", id)
       .maybeSingle();
 
-    if (error || !data) {
+    if (error) {
+      // If resolution_note column doesn't exist yet (migration pending), retry without it
+      if (error.message?.includes("resolution_note")) {
+        const { data: fallback, error: fallbackError } = await supabaseAdmin
+          .from("concerns")
+          .select("id, content, category, status, created_at, asker_session_id")
+          .eq("id", id)
+          .maybeSingle();
+        if (fallbackError || !fallback) {
+          return NextResponse.json({ error: "Concern not found." }, { status: 404 });
+        }
+        return NextResponse.json({ concern: fallback });
+      }
+      return NextResponse.json({ error: "Concern not found." }, { status: 404 });
+    }
+    if (!data) {
       return NextResponse.json({ error: "Concern not found." }, { status: 404 });
     }
     return NextResponse.json({ concern: data });

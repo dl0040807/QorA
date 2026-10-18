@@ -77,13 +77,24 @@ export async function GET(
     .maybeSingle();
 
   if (cached && cached.answer_count === count) {
-    // Cache hit — return stored result immediately, no Claude call
-    return NextResponse.json({
-      ready: true,
-      count,
-      ...(cached.cache as SynthesisResult),
-      answers: answerList as AnswerItem[],
-    });
+    // Validate cache integrity — reject if any perspective has an empty label or zero percentage
+    const cachedResult = cached.cache as SynthesisResult;
+    const isValid =
+      Array.isArray(cachedResult.perspectives) &&
+      cachedResult.perspectives.length > 0 &&
+      cachedResult.perspectives.every((p) => p.label?.trim() && p.percentage > 0) &&
+      typeof cachedResult.summary === "string" &&
+      cachedResult.summary.trim().length > 0;
+
+    if (isValid) {
+      return NextResponse.json({
+        ready: true,
+        count,
+        ...cachedResult,
+        answers: answerList as AnswerItem[],
+      });
+    }
+    // Cache is corrupt — fall through to re-run Claude and overwrite it
   }
 
   // Cache miss or stale — call Claude

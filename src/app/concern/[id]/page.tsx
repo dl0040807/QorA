@@ -37,6 +37,8 @@ interface ConcernData {
   content: string;
   category: string | null;
   asker_session_id: string;
+  status: "open" | "closed";
+  resolution_note?: string | null;
 }
 
 const INITIAL_VISIBLE = 5;
@@ -206,6 +208,14 @@ export default function ConcernPage({ params }: { params: Promise<{ id: string }
   const [editConcernSaving, setEditConcernSaving] = useState(false);
   const [editConcernError, setEditConcernError] = useState("");
 
+  // Close / resolve state
+  const [showResolvePanel, setShowResolvePanel] = useState(false);
+  const [resolutionNote, setResolutionNote] = useState("");
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftError, setDraftError] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState("");
+
   // Resolve params
   useEffect(() => {
     params.then(({ id: resolvedId }) => setId(resolvedId));
@@ -231,12 +241,27 @@ export default function ConcernPage({ params }: { params: Promise<{ id: string }
         const cj = await concernRes.json();
         if (cj.concern) {
           setConcern(cj.concern);
-          // Check ownership: compare current anon session id with the concern's asker id
+
+          // Primary ownership check: match Supabase session ID
           const currentUserId = sessionData?.session?.user?.id;
           if (currentUserId) {
             setSessionId(currentUserId);
             if (cj.concern.asker_session_id === currentUserId) {
               setIsOwner(true);
+            }
+          }
+
+          // Fallback ownership check: concern ID is in this browser's localStorage
+          // (handles the case where the Supabase session rehydrates slowly or
+          //  the anonymous session was recreated but localStorage still has the ID)
+          if (!currentUserId || cj.concern.asker_session_id !== currentUserId) {
+            try {
+              const stored: { id: string }[] = JSON.parse(localStorage.getItem("gogo_my_concerns") ?? "[]");
+              if (stored.some((c) => c.id === currentId)) {
+                setIsOwner(true);
+              }
+            } catch {
+              // localStorage unavailable — ignore
             }
           }
         }
@@ -560,7 +585,7 @@ export default function ConcernPage({ params }: { params: Promise<{ id: string }
             {/* Percentage bars */}
             <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginBottom: "28px" }}>
               {[...(synthesis.perspectives ?? [])].sort((a, b) => b.percentage - a.percentage).map((p, i) => (
-                <div key={p.label}>
+                <div key={`${p.label}-${i}`}>
                   <div
                     style={{
                       display: "flex",
@@ -719,10 +744,266 @@ export default function ConcernPage({ params }: { params: Promise<{ id: string }
           </div>
         )}
 
+        {/* Resolved banner — visible to everyone when concern is closed */}
+        {concern?.status === "closed" && (
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderLeft: "3px solid var(--ink)",
+              borderRadius: "4px",
+              padding: "20px",
+              marginBottom: "24px",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "11px",
+                letterSpacing: "0.14em",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                color: "var(--ink-4)",
+                marginBottom: "10px",
+              }}
+            >
+              ✓ Resolved
+            </p>
+            {concern.resolution_note ? (
+              <p style={{ fontSize: "14px", lineHeight: 1.75, color: "var(--ink-2)" }}>
+                {concern.resolution_note}
+              </p>
+            ) : (
+              <p style={{ fontSize: "14px", color: "var(--ink-4)", fontStyle: "italic" }}>
+                The asker has marked this concern as resolved.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Actions */}
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {isOwner ? (
-            /* Owner: show a notice instead of the answer button */
+            concern?.status === "closed" ? (
+              /* Owner already closed — show read-only note */
+              <div
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "4px",
+                  padding: "16px 20px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <span style={{ fontSize: "16px" }}>✅</span>
+                <p style={{ fontSize: "13px", color: "var(--ink-3)", lineHeight: 1.5, margin: 0 }}>
+                  You have resolved this concern.
+                </p>
+              </div>
+            ) : (
+              /* Owner open concern: notice + resolve button */
+              <>
+                <div
+                  style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "4px",
+                    padding: "16px 20px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <span style={{ fontSize: "16px" }}>✍️</span>
+                  <p style={{ fontSize: "13px", color: "var(--ink-3)", lineHeight: 1.5, margin: 0 }}>
+                    This is your own concern.
+                    <br />
+                    Share the link to collect answers from others.
+                  </p>
+                </div>
+
+                {/* Mark as resolved — always available to owner */}
+                {!showResolvePanel && (
+                  <button
+                    onClick={async () => {
+                      setShowResolvePanel(true);
+                      setDraftError("");
+                      setDraftLoading(true);
+                      try {
+                        const params = new URLSearchParams({
+                          content: concern?.content ?? "",
+                          summary: synthesis?.summary ?? "",
+                        });
+                        const res = await fetch(`/api/concerns/${id}/close?${params}`);
+                        const json = await res.json();
+                        if (res.ok && json.draft) {
+                          setResolutionNote(json.draft);
+                        } else {
+                          setDraftError(json.error ?? "Could not generate draft.");
+                        }
+                      } catch {
+                        setDraftError("Network error. You can still write your own note.");
+                      } finally {
+                        setDraftLoading(false);
+                      }
+                    }}
+                    style={{
+                      width: "100%",
+                      borderRadius: "4px",
+                      background: "transparent",
+                      color: "var(--ink)",
+                      border: "1px solid var(--border)",
+                      padding: "14px 16px",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      letterSpacing: "-0.01em",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Mark as resolved ✓
+                  </button>
+                )}
+
+                {/* Resolve panel */}
+                {showResolvePanel && (
+                  <div
+                    style={{
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "4px",
+                      padding: "20px",
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: "11px",
+                        letterSpacing: "0.14em",
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        color: "var(--ink-4)",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      Your closing note
+                    </p>
+                    {draftLoading ? (
+                      <p style={{ fontSize: "13px", color: "var(--ink-4)", marginBottom: "12px" }}>
+                        AI is drafting a closing note for you…
+                      </p>
+                    ) : (
+                      <>
+                        {draftError && (
+                          <p style={{ fontSize: "12px", color: "var(--destructive)", marginBottom: "8px" }}>
+                            {draftError}
+                          </p>
+                        )}
+                        <textarea
+                          value={resolutionNote}
+                          onChange={(e) => setResolutionNote(e.target.value)}
+                          maxLength={600}
+                          rows={5}
+                          placeholder="Write a short note to let people know what you decided…"
+                          style={{
+                            width: "100%",
+                            resize: "none",
+                            borderRadius: "4px",
+                            border: "1px solid var(--border)",
+                            background: "var(--bg)",
+                            padding: "12px",
+                            fontSize: "14px",
+                            color: "var(--ink)",
+                            lineHeight: 1.7,
+                            outline: "none",
+                            fontFamily: "inherit",
+                            marginBottom: "6px",
+                            boxSizing: "border-box",
+                          }}
+                          onFocus={(e) => (e.currentTarget.style.borderColor = "var(--ink)")}
+                          onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+                        />
+                        <p style={{ fontSize: "11px", color: "var(--ink-4)", textAlign: "right", marginBottom: "12px", fontVariantNumeric: "tabular-nums" }}>
+                          {resolutionNote.length}/600
+                        </p>
+                        {resolveError && (
+                          <p style={{ fontSize: "12px", color: "var(--destructive)", marginBottom: "8px" }}>
+                            {resolveError}
+                          </p>
+                        )}
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            disabled={resolving || !resolutionNote.trim()}
+                            onClick={async () => {
+                              setResolveError("");
+                              setResolving(true);
+                              try {
+                                const res = await fetch(`/api/concerns/${id}/close`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    askerSessionId: sessionId,
+                                    resolution_note: resolutionNote.trim(),
+                                  }),
+                                });
+                                const json = await res.json();
+                                if (!res.ok) {
+                                  setResolveError(json.error ?? "Could not resolve concern.");
+                                  return;
+                                }
+                                // Update local concern state to closed
+                                setConcern((prev) =>
+                                  prev
+                                    ? { ...prev, status: "closed", resolution_note: json.concern.resolution_note }
+                                    : prev,
+                                );
+                                setShowResolvePanel(false);
+                              } catch {
+                                setResolveError("Network error. Please try again.");
+                              } finally {
+                                setResolving(false);
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              borderRadius: "4px",
+                              background: "var(--ink)",
+                              color: "var(--accent-fg)",
+                              border: "none",
+                              padding: "12px 16px",
+                              fontSize: "13px",
+                              fontWeight: 700,
+                              cursor: resolving || !resolutionNote.trim() ? "not-allowed" : "pointer",
+                              opacity: resolving || !resolutionNote.trim() ? 0.45 : 1,
+                              fontFamily: "inherit",
+                            }}
+                          >
+                            {resolving ? "Posting…" : "Post & close"}
+                          </button>
+                          <button
+                            onClick={() => { setShowResolvePanel(false); setResolveError(""); }}
+                            style={{
+                              borderRadius: "4px",
+                              background: "transparent",
+                              color: "var(--ink-3)",
+                              border: "1px solid var(--border)",
+                              padding: "12px 16px",
+                              fontSize: "13px",
+                              cursor: "pointer",
+                              fontFamily: "inherit",
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
+            )
+          ) : concern?.status === "closed" ? (
+            /* Non-owner, closed concern — no answer button */
             <div
               style={{
                 background: "var(--surface)",
@@ -734,11 +1015,9 @@ export default function ConcernPage({ params }: { params: Promise<{ id: string }
                 gap: "10px",
               }}
             >
-              <span style={{ fontSize: "16px" }}>✍️</span>
+              <span style={{ fontSize: "16px" }}>🔒</span>
               <p style={{ fontSize: "13px", color: "var(--ink-3)", lineHeight: 1.5, margin: 0 }}>
-                This is your own concern.
-                <br />
-                Share the link to collect answers from others.
+                This concern has been resolved.
               </p>
             </div>
           ) : (
@@ -762,11 +1041,14 @@ export default function ConcernPage({ params }: { params: Promise<{ id: string }
             </button>
           )}
 
-          <ShareButton
-            url={shareUrl}
-            title="Answer my concern"
-            text={`${concern?.content?.slice(0, 80) ?? ""}${(concern?.content?.length ?? 0) > 80 ? "…" : ""}\n\nDrop me your honest take 🙏`}
-          />
+          {/* Share button only when concern is still open */}
+          {concern?.status !== "closed" && (
+            <ShareButton
+              url={shareUrl}
+              title="Answer my concern"
+              text={`${concern?.content?.slice(0, 80) ?? ""}${(concern?.content?.length ?? 0) > 80 ? "…" : ""}\n\nDrop me your honest take 🙏`}
+            />
+          )}
         </div>
       </div>
     </div>

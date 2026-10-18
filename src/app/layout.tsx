@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   title: "Q or A — Anonymous advice community",
   description:
     "Post anonymously and let AI synthesise honest responses from strangers",
+  icons: { icon: "/icon.svg" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
