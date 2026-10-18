@@ -1,2 +1,2 @@
--- 추천 결과에 매칭도(score)를 저장 — 결과 화면에서 오른쪽에 표시하기 위함.
+-- Store the match score on each recommendation, to show it on the right side of the result screen.
 alter table recommendations add column score int;

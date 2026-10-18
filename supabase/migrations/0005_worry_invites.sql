@@ -1,5 +1,5 @@
--- F3-5: 고민 링크로 지인이 직접 답하는 플로우.
--- contact_invites(옛 F3-2 성향 퀴즈)와는 별개로, 특정 worry에 대한 답변을 받는 용도.
+-- F3-5: flow where a contact answers a worry directly via a shared link.
+-- Separate from contact_invites (the old F3-2 personality quiz); this collects answers to a specific worry.
 create table worry_invites (
   id uuid primary key default gen_random_uuid(),
   token uuid unique not null default gen_random_uuid(),
@@ -19,8 +19,8 @@ create index worry_invites_token_idx on worry_invites(token);
 
 alter table worry_invites enable row level security;
 
--- 링크를 만든 본인만 자기 초대 목록을 조회/생성할 수 있다.
--- 답변을 남기는 지인은 로그인이 없으므로, 응답 저장은 서버(service role)에서만 처리한다.
+-- Only the user who created a link can view/create their own invites.
+-- The responding contact is not logged in, so saving responses is handled only on the server (service role).
 create policy "worry_invites_select_own" on worry_invites
   for select using (auth.uid() = user_id);
 
