@@ -32,9 +32,8 @@ No test command exists. There is no testing framework configured.
 ## Architecture
 
 - `src/app/` — Next.js App Router pages and API routes
-- `src/containers/` — Heavy client-side logic lives here (`HomeContainer.tsx` is ~2300 lines, the main UI)
-- `src/apis/` — Client-side fetch wrappers to internal API routes
-- `src/services/` — Supabase read/write helpers (separate from API routes)
+- `src/containers/` — Heavy client-side logic lives here (`AskerContainer.tsx`, `AnswererContainer.tsx`)
+- `src/components/` — Shared UI components (`ShareButton.tsx`, `SpinDrum.tsx`)
 - `src/lib/supabase/` — Two clients: `client.ts` (anon, browser-safe) and `admin.ts` (service role, server-only)
 - `src/styles/wds/` — Design-system CSS tokens generated from Figma; do not hand-edit
 - `supabase/migrations/` — Forward-only SQL migrations (no rollback mechanism)
@@ -47,11 +46,11 @@ No test command exists. There is no testing framework configured.
 
 **Supabase typing:** The client is **not** typed with the `Database<>` generic due to schema-shape conflicts. Use `.returns<T>()` at the call site for reads; inserts pass plain objects. Shared domain types live in `src/lib/supabase/types.ts`.
 
-**Claude tool-use responses:** `contact_id` in Claude's tool output must be validated against the actual contact IDs before DB insert — Claude's `required` fields are hints, not guarantees (see `src/app/api/analyze/route.ts`).
+**Claude tool-use responses:** Claude's `required` fields are hints, not guarantees — always validate tool output before DB insert.
 
 **Route handler dynamic params** (Next.js 16): `params` is a `Promise<{...}>` — always `await params` before destructuring.
 
-**Kakao SDK:** Loaded lazily via a single `loadPromise` singleton in `src/utils/kakao.ts`; `NEXT_PUBLIC_KAKAO_JS_KEY` must be set or all share calls throw.
+**Sharing:** Uses the Web Share API (`navigator.share`) with a clipboard copy fallback — no Kakao SDK. See `src/components/ShareButton.tsx`.
 
 ## Environment Variables (required)
 
@@ -60,12 +59,11 @@ ANTHROPIC_API_KEY
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY   # server-only; never prefix with NEXT_PUBLIC_
-NEXT_PUBLIC_KAKAO_JS_KEY
 ```
 
 ## Code Style
 
 - Path alias `@/` maps to `src/`
-- UI styling uses both Tailwind utility classes **and** inline `React.CSSProperties` objects (pattern visible throughout `HomeContainer.tsx`) — mixing is intentional
-- WDS design tokens (CSS variables from `src/styles/wds/fig-tokens.css`) are used directly in inline styles, e.g. `var(--primary-normal)`, `var(--line-normal-normal)`
+- UI styling uses inline `React.CSSProperties` objects throughout — mixing with Tailwind utilities is intentional
+- WDS design tokens (CSS variables from `src/styles/wds/fig-tokens.css`) are used directly in inline styles, e.g. `var(--ink)`, `var(--border)`
 - Korean string literals throughout UI and API prompts — do not translate to English
