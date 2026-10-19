@@ -2,7 +2,7 @@
 
 Post a concern anonymously, let strangers answer it, and get an AI-written synthesis of the different perspectives. No login required.
 
-**Live demo:** https://gomin-tester-ai.vercel.app
+**Live demo:** https://qor-a-pyn5.vercel.app
 
 Built with Next.js, Supabase and the Claude API for the Wanted AI Championship 2026.
 
