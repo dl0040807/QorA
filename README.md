@@ -4,7 +4,7 @@ Post a concern anonymously, let strangers answer it, and get an AI-written synth
 
 **Live demo:** https://qor-a-pyn5.vercel.app
 
-Built with Next.js, Supabase, the Claude API and IBM Bob for the AngelHack IBM Bob Hackathon.
+Built with Next.js, Supabase, the Claude API, and IBM Bob for the AngelHack IBM Bob Hackathon.
 
 ## Features
 
