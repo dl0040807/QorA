@@ -2,14 +2,24 @@ export default function Loading() {
   return (
     <div
       style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        color: "#737373",
-        fontSize: 14,
+        minHeight: "100dvh",
+        background: "var(--bg)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      불러오는 중…
+      <p
+        style={{
+          fontSize: "11px",
+          letterSpacing: "0.16em",
+          fontWeight: 600,
+          textTransform: "uppercase",
+          color: "var(--ink-4)",
+        }}
+      >
+        Loading…
+      </p>
     </div>
   );
 }

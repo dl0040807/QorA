@@ -1,7 +1,7 @@
--- H3 바이럴: 지인에게 역질문 링크
--- 링크를 받은 지인은 로그인 없이 3문항에 답해 자기 프로필을 채운다.
--- 응답 제출(공개, 비로그인)은 service role 키를 쓰는 서버 라우트에서만 처리하고,
--- 이 테이블 자체의 RLS는 소유자(링크를 만든 사용자) 전용으로 유지한다.
+-- H3 viral: reverse-question link sent to a contact
+-- The contact who receives the link answers 3 questions without logging in to fill in their own profile.
+-- Response submission (public, no login) is handled only in a server route that uses the service role key,
+-- while this table's own RLS stays owner-only (the user who created the link).
 
 create table contact_invites (
   id uuid primary key default gen_random_uuid(),
