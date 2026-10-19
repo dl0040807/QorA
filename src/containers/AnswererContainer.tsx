@@ -553,7 +553,7 @@ export default function AnswererContainer({
     return (
       <Shell
         onBack={() => {
-          if (!prefillConcernId) setStep("pick");
+          if (!prefillConcernId) setStep(rankings.length ? "pick" : "preference");
           else window.history.back();
         }}
       >
